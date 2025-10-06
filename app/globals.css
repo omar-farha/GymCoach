@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 141 73% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 63%;
+    --accent: 141 73% 42%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 141 73% 42%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar - Spotify style */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #121212;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1DB954;
+  border-radius: 6px;
+  border: 3px solid #121212;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1ed760;
+}
+
+/* Dark Modern background */
+body {
+  background: #121212;
+  min-height: 100vh;
+}
+
+/* Update RTL Support - keep body LTR but make text RTL for Arabic */
+.arabic-layout {
+  direction: rtl;
+}
+
+.arabic-layout input,
+.arabic-layout textarea,
+.arabic-layout select {
+  text-align: right;
+}
+
+.arabic-layout .flex {
+  flex-direction: row-reverse;
+}
+
+.arabic-layout .ml-2 {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+.arabic-layout .ml-3 {
+  margin-left: 0;
+  margin-right: 0.75rem;
+}
+
+.arabic-layout .mr-2 {
+  margin-right: 0;
+  margin-left: 0.5rem;
+}
+
+.arabic-layout .mr-3 {
+  margin-right: 0;
+  margin-left: 0.75rem;
+}
+
+.arabic-layout .mr-4 {
+  margin-right: 0;
+  margin-left: 1rem;
+}
+
+.arabic-layout .ml-auto {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.arabic-layout .mr-auto {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+/* Keep grid and flexbox layouts working properly */
+.arabic-layout .grid {
+  direction: ltr;
+}
+
+.arabic-layout .grid > * {
+  direction: rtl;
+}
+
+/* Fix button and card layouts */
+.arabic-layout .justify-between {
+  flex-direction: row-reverse;
+}
+
+.arabic-layout .gap-2 > *,
+.arabic-layout .gap-4 > * {
+  direction: rtl;
+}
