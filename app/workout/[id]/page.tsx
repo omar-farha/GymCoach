@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Play, Pause, RotateCcw, Share2, Download, Globe } from "lucide-react"
+import { Play, Pause, RotateCcw, Share2, Download, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useLanguage } from "@/hooks/use-language"
-import { supabase } from "@/lib/supabase"
+import { useWorkout } from "@/hooks/use-workouts"
 import { toast } from "sonner"
 
 interface Exercise {
@@ -33,7 +34,6 @@ interface WorkoutPlan {
 }
 
 export default function WorkoutView({ params }: { params: { id: string } }) {
-  const [workout, setWorkout] = useState<WorkoutPlan | null>(null)
   const [currentExercise, setCurrentExercise] = useState(0)
   const [currentSet, setCurrentSet] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -41,32 +41,18 @@ export default function WorkoutView({ params }: { params: { id: string } }) {
   const [timer, setTimer] = useState(0)
   const [exerciseTimer, setExerciseTimer] = useState(45) // 45 seconds per exercise
   const [restTimer, setRestTimer] = useState(60) // 60 seconds rest between sets
-  const [loading, setLoading] = useState(true)
   const { language, toggleLanguage, t } = useLanguage()
 
+  // Use React Query hook for caching
+  const { data: workout, isLoading: loading, isError, error } = useWorkout(params.id)
+
+  // Show error toast when fetch fails
   useEffect(() => {
-    fetchWorkout()
-  }, [params.id])
-
-  const fetchWorkout = async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('workout_plans')
-        .select('*')
-        .eq('id', params.id)
-        .single()
-
-      if (error) throw error
-
-      setWorkout(data)
-    } catch (error) {
-      console.error('Error fetching workout:', error)
+    if (isError) {
       toast.error('Failed to load workout')
-    } finally {
-      setLoading(false)
+      console.error('Error fetching workout:', error)
     }
-  }
+  }, [isError, error])
 
   useEffect(() => {
     let interval: NodeJS.Timeout

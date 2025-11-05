@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Plus, X, Play, ArrowLeft, Send, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/hooks/use-language";
-import { useDebounce } from "@/hooks/use-debounce";
-import { useExercises, type Exercise } from "@/hooks/use-exercises";
-import { ExerciseCardSkeletonGrid } from "@/components/exercise-card-skeleton";
-import { PaginationControls } from "@/components/pagination-controls";
-import { WorkoutFormSection } from "@/components/workout-form-section";
-import { ExerciseGrid } from "@/components/exercise-grid";
+import { supabase } from "@/lib/supabase";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +23,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Update the Exercise interface to include sets and reps
+interface Exercise {
+  id: string;
+  name: string;
+  bodyPart: string;
+  equipment: string;
+  gifUrl: string;
+  target: string;
+  instructions: string[];
+  sets?: number;
+  reps?: number;
+}
 
 interface WorkoutPlan {
   id: string;
@@ -49,30 +57,16 @@ export default function WorkoutBuilder({
   onCancel,
   editingWorkout,
 }: WorkoutBuilderProps) {
+  const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [bodyPart, setBodyPart] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [workoutName, setWorkoutName] = useState("");
   const [clientName, setClientName] = useState("");
   const [notes, setNotes] = useState("");
   const [previewExercise, setPreviewExercise] = useState<Exercise | null>(null);
   const { t } = useLanguage();
-
-  // Debounce search to reduce filtering operations
-  const debouncedSearch = useDebounce(searchTerm, 300);
-
-  // Fetch exercises with pagination
-  const {
-    data: exercisesData,
-    isLoading,
-    isError,
-    error,
-  } = useExercises({
-    bodyPart,
-    search: debouncedSearch,
-    page: currentPage,
-  });
 
   // Load editing workout data
   useEffect(() => {
@@ -98,58 +92,71 @@ export default function WorkoutBuilder({
     "waist",
   ];
 
-  // Memoize callbacks to prevent recreation on every render
-  const handleBodyPartChange = useCallback((value: string) => {
-    setBodyPart(value);
-    setCurrentPage(1);
-  }, []);
+  useEffect(() => {
+    fetchExercises();
+  }, [bodyPart]);
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value);
-    setCurrentPage(1);
-  }, []);
+  const fetchExercises = async () => {
+    setLoading(true);
+    try {
+      const url = `/api/exercises?bodyPart=${bodyPart}`;
+      const response = await fetch(url);
 
-  const handlePageChange = useCallback((page: number) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 400, behavior: "smooth" });
-  }, []);
+      if (response.ok) {
+        const data = await response.json();
+        setExercises(data);
+      } else {
+        console.error("Failed to fetch exercises");
+      }
+    } catch (error) {
+      console.error("Error fetching exercises:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const addExercise = useCallback((exercise: Exercise) => {
-    setSelectedExercises((prev) => {
-      if (prev.find((e) => e.id === exercise.id)) return prev;
-      return [...prev, { ...exercise, sets: 3, reps: 12 }];
-    });
-  }, []);
+  const filteredExercises = exercises.filter(
+    (exercise) =>
+      exercise.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      exercise.target.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const updateExercise = useCallback((exerciseId: string, sets: number, reps: number) => {
+  // In the addExercise function, add default sets and reps
+  const addExercise = (exercise: Exercise) => {
+    if (!selectedExercises.find((e) => e.id === exercise.id)) {
+      setSelectedExercises([
+        ...selectedExercises,
+        { ...exercise, sets: 3, reps: 12 },
+      ]);
+    }
+  };
+
+  // Add updateExercise function after addExercise
+  const updateExercise = (exerciseId: string, sets: number, reps: number) => {
     setSelectedExercises((prev) =>
       prev.map((ex) => (ex.id === exerciseId ? { ...ex, sets, reps } : ex))
     );
-  }, []);
+  };
 
-  const removeExercise = useCallback((exerciseId: string) => {
-    setSelectedExercises((prev) => prev.filter((e) => e.id !== exerciseId));
-  }, []);
+  const removeExercise = (exerciseId: string) => {
+    setSelectedExercises(selectedExercises.filter((e) => e.id !== exerciseId));
+  };
 
-  const moveExerciseUp = useCallback((index: number) => {
-    setSelectedExercises((prev) => {
-      if (index === 0) return prev;
-      const newExercises = [...prev];
-      [newExercises[index - 1], newExercises[index]] = [newExercises[index], newExercises[index - 1]];
-      return newExercises;
-    });
-  }, []);
+  const moveExerciseUp = (index: number) => {
+    if (index === 0) return;
+    const newExercises = [...selectedExercises];
+    [newExercises[index - 1], newExercises[index]] = [newExercises[index], newExercises[index - 1]];
+    setSelectedExercises(newExercises);
+  };
 
-  const moveExerciseDown = useCallback((index: number) => {
-    setSelectedExercises((prev) => {
-      if (index === prev.length - 1) return prev;
-      const newExercises = [...prev];
-      [newExercises[index], newExercises[index + 1]] = [newExercises[index + 1], newExercises[index]];
-      return newExercises;
-    });
-  }, []);
+  const moveExerciseDown = (index: number) => {
+    if (index === selectedExercises.length - 1) return;
+    const newExercises = [...selectedExercises];
+    [newExercises[index], newExercises[index + 1]] = [newExercises[index + 1], newExercises[index]];
+    setSelectedExercises(newExercises);
+  };
 
-  const saveWorkout = useCallback(() => {
+  const saveWorkout = () => {
     if (!workoutName.trim() || selectedExercises.length === 0) return;
 
     const workout = {
@@ -160,26 +167,7 @@ export default function WorkoutBuilder({
     };
 
     onSave(workout);
-  }, [workoutName, selectedExercises, clientName, notes, onSave]);
-
-  // Form input handlers - memoized to prevent re-renders
-  const handleWorkoutNameChange = useCallback((value: string) => {
-    setWorkoutName(value);
-  }, []);
-
-  const handleClientNameChange = useCallback((value: string) => {
-    setClientName(value);
-  }, []);
-
-  const handleNotesChange = useCallback((value: string) => {
-    setNotes(value);
-  }, []);
-
-  // Memoize selected exercise IDs set for efficient lookups
-  const selectedExerciseIds = useMemo(
-    () => new Set(selectedExercises.map(e => e.id)),
-    [selectedExercises]
-  );
+  };
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
@@ -231,14 +219,42 @@ export default function WorkoutBuilder({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 flex-1 overflow-y-auto">
-                <WorkoutFormSection
-                  workoutName={workoutName}
-                  clientName={clientName}
-                  notes={notes}
-                  onWorkoutNameChange={handleWorkoutNameChange}
-                  onClientNameChange={handleClientNameChange}
-                  onNotesChange={handleNotesChange}
-                />
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">
+                    {t("Workout Name")} *
+                  </label>
+                  <Input
+                    value={workoutName}
+                    onChange={(e) => setWorkoutName(e.target.value)}
+                    placeholder={t("Enter workout name")}
+                    className="bg-[#282828] border-none text-white focus:ring-2 focus:ring-[#1DB954]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">
+                    {t("Client Name")}
+                  </label>
+                  <Input
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder={t("Enter client name")}
+                    className="bg-[#282828] border-none text-white focus:ring-2 focus:ring-[#1DB954]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">
+                    {t("Notes")}
+                  </label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t("Add workout notes or instructions")}
+                    className="bg-[#282828] border-none text-white focus:ring-2 focus:ring-[#1DB954]"
+                    rows={3}
+                  />
+                </div>
 
                 {/* Selected Exercises */}
                 <div>
@@ -253,6 +269,7 @@ export default function WorkoutBuilder({
                           initial={{ x: -20, opacity: 0 }}
                           animate={{ x: 0, opacity: 1 }}
                           exit={{ x: -20, opacity: 0 }}
+                          transition={{ delay: index * 0.05 }}
                           className="p-3 bg-[#282828] rounded-lg space-y-3 hover:bg-[#2a2a2a] transition-colors"
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -356,11 +373,6 @@ export default function WorkoutBuilder({
                 <CardTitle className="text-[#1DB954]">
                   {t("Find Exercises")}
                 </CardTitle>
-                {debouncedSearch && exercisesData && (
-                  <CardDescription className="text-[#1DB954] mt-2">
-                    {exercisesData.totalCount} {t("results found")}
-                  </CardDescription>
-                )}
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -369,7 +381,7 @@ export default function WorkoutBuilder({
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
                         value={searchTerm}
-                        onChange={(e) => handleSearchChange(e.target.value)}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder={t("Search exercises...")}
                         className="pl-10 bg-[#282828] border-none text-white focus:ring-2 focus:ring-[#1DB954]"
                       />
@@ -377,7 +389,7 @@ export default function WorkoutBuilder({
                   </div>
                   <select
                     value={bodyPart}
-                    onChange={(e) => handleBodyPartChange(e.target.value)}
+                    onChange={(e) => setBodyPart(e.target.value)}
                     className="px-3 py-2 bg-[#282828] border-none rounded-md text-white focus:ring-2 focus:ring-[#1DB954]"
                   >
                     {bodyParts.map((part) => (
@@ -393,43 +405,84 @@ export default function WorkoutBuilder({
             </Card>
 
             {/* Exercise Grid */}
-            {isLoading && <ExerciseCardSkeletonGrid count={50} />}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1DB954]"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <AnimatePresence>
+                  {filteredExercises.map((exercise, index) => (
+                    <motion.div
+                      key={exercise.id}
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Card className="bg-[#181818] border-none hover:bg-[#282828] transition-colors">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <CardTitle className="text-white text-base leading-tight">
+                                {exercise.name}
+                              </CardTitle>
+                              <CardDescription className="mt-1">
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-[#1DB954]/20 text-[#1DB954] text-xs border-none"
+                                >
+                                  {exercise.target}
+                                </Badge>
+                                <span className="text-gray-400 text-xs ml-2">
+                                  {exercise.equipment}
+                                </span>
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div
+                            className="relative mb-4 bg-[#121212] rounded-lg overflow-hidden cursor-pointer group"
+                            onClick={() => setPreviewExercise(exercise)}
+                          >
+                            <img
+                              src={exercise.gifUrl || "/placeholder.svg"}
+                              alt={exercise.name}
+                              className="w-full h-48 object-contain"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="text-center">
+                                <Play className="w-8 h-8 text-[#1DB954] mx-auto mb-1" />
+                                <p className="text-white text-sm font-medium">{t("Preview")}</p>
+                              </div>
+                            </div>
+                          </div>
 
-            {isError && (
-              <Card className="bg-[#181818] border-none border-red-500/20">
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <div className="text-red-500 text-center">
-                    <p className="text-lg font-semibold mb-2">Failed to load exercises</p>
-                    <p className="text-sm text-gray-400">{error instanceof Error ? error.message : "Unknown error"}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {!isLoading && !isError && exercisesData && (
-              <>
-                <ExerciseGrid
-                  exercises={exercisesData.exercises}
-                  selectedExerciseIds={selectedExerciseIds}
-                  onAddExercise={addExercise}
-                  onPreviewExercise={setPreviewExercise}
-                />
-
-                {/* Pagination */}
-                {exercisesData.totalPages > 1 && (
-                  <Card className="bg-[#181818] border-none">
-                    <CardContent className="p-4">
-                      <PaginationControls
-                        currentPage={exercisesData.currentPage}
-                        totalPages={exercisesData.totalPages}
-                        totalItems={exercisesData.totalCount}
-                        itemsPerPage={exercisesData.itemsPerPage}
-                        onPageChange={handlePageChange}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-              </>
+                          <Button
+                            onClick={() => addExercise(exercise)}
+                            disabled={selectedExercises.some(
+                              (e) => e.id === exercise.id
+                            )}
+                            className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold disabled:bg-[#282828] disabled:text-gray-500"
+                          >
+                            {selectedExercises.some(
+                              (e) => e.id === exercise.id
+                            ) ? (
+                              t("Added")
+                            ) : (
+                              <>
+                                <Plus className="w-4 h-4 mr-2" />
+                                {t("Add Exercise")}
+                              </>
+                            )}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
             )}
           </motion.div>
         </div>

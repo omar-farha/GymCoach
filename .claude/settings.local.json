@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(dir /s \"d:\\Front-end Dev\\Projects\\Online Fitness Training\\app\")",
+      "Bash(dir /s \"d:\\Front-end Dev\\Projects\\Online Fitness Training\\components\")",
+      "Bash(npx tsc:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

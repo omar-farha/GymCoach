@@ -1,26 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Plus, Dumbbell, Users, Share2, Globe, Pencil, Trash2, Copy, Search } from "lucide-react"
+import { Plus, Dumbbell, Users, Share2, Globe, Pencil, Trash2, Copy, Search, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import WorkoutBuilder from "@/components/workout-builder"
-import { WorkoutCardSkeletonGrid } from "@/components/workout-card-skeleton"
-import { PaginationControls } from "@/components/pagination-controls"
 import { useLanguage } from "@/hooks/use-language"
-import { useDebounce } from "@/hooks/use-debounce"
-import {
-  useWorkouts,
-  useWorkoutStats,
-  useCreateWorkout,
-  useUpdateWorkout,
-  useDeleteWorkout,
-  useDuplicateWorkout,
-} from "@/hooks/use-workouts"
-import type { WorkoutPlan } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,50 +22,104 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+interface WorkoutPlan {
+  id: string
+  name: string
+  exercises: any[]
+  created_at: string
+  client_name?: string
+  notes?: string
+}
+
 export default function Dashboard() {
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([])
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState<WorkoutPlan | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [workoutToDelete, setWorkoutToDelete] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"date" | "name" | "client">("date")
-  const [currentPage, setCurrentPage] = useState(1)
-
   const { language, toggleLanguage, t } = useLanguage()
 
-  // Debounce search to reduce unnecessary API calls
-  const debouncedSearch = useDebounce(searchTerm, 300)
+  useEffect(() => {
+    fetchWorkoutPlans()
+  }, [])
 
-  // Fetch workouts with pagination and filters
-  const {
-    data: workoutsData,
-    isLoading,
-    isError,
-    error,
-  } = useWorkouts({
-    search: debouncedSearch,
-    sortBy,
-    page: currentPage,
-  })
+  const fetchWorkoutPlans = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('workout_plans')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-  // Fetch statistics
-  const { data: stats } = useWorkoutStats()
+      if (error) throw error
 
-  // Mutations
-  const createMutation = useCreateWorkout()
-  const updateMutation = useUpdateWorkout()
-  const deleteMutation = useDeleteWorkout()
-  const duplicateMutation = useDuplicateWorkout()
-
-  // Handlers
-  const saveWorkoutPlan = async (plan: Omit<WorkoutPlan, "id" | "created_at">) => {
-    if (editingWorkout) {
-      await updateMutation.mutateAsync({ id: editingWorkout.id, plan })
-    } else {
-      await createMutation.mutateAsync(plan)
+      setWorkoutPlans(data || [])
+    } catch (error) {
+      console.error('Error fetching workout plans:', error)
+      toast.error('Failed to load workout plans')
+    } finally {
+      setLoading(false)
     }
-    setShowBuilder(false)
-    setEditingWorkout(null)
+  }
+
+  const saveWorkoutPlan = async (plan: Omit<WorkoutPlan, 'id' | 'created_at'>) => {
+    try {
+      if (editingWorkout) {
+        // Update existing workout
+        const { data, error } = await supabase
+          .from('workout_plans')
+          .update(plan)
+          .eq('id', editingWorkout.id)
+          .select()
+          .single()
+
+        if (error) throw error
+
+        setWorkoutPlans(workoutPlans.map(w => w.id === data.id ? data : w))
+        toast.success('Workout plan updated successfully!')
+      } else {
+        // Create new workout
+        const { data, error } = await supabase
+          .from('workout_plans')
+          .insert([plan])
+          .select()
+          .single()
+
+        if (error) throw error
+
+        setWorkoutPlans([data, ...workoutPlans])
+        toast.success('Workout plan created successfully!')
+      }
+
+      setShowBuilder(false)
+      setEditingWorkout(null)
+    } catch (error) {
+      console.error('Error saving workout plan:', error)
+      toast.error(editingWorkout ? 'Failed to update workout plan' : 'Failed to save workout plan')
+    }
+  }
+
+  const deleteWorkoutPlan = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('workout_plans')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setWorkoutPlans(workoutPlans.filter(w => w.id !== id))
+      toast.success('Workout plan deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting workout plan:', error)
+      toast.error('Failed to delete workout plan')
+    } finally {
+      setDeleteDialogOpen(false)
+      setWorkoutToDelete(null)
+    }
   }
 
   const handleEdit = (workout: WorkoutPlan) => {
@@ -88,16 +132,29 @@ export default function Dashboard() {
     setDeleteDialogOpen(true)
   }
 
-  const confirmDelete = async () => {
-    if (workoutToDelete) {
-      await deleteMutation.mutateAsync(workoutToDelete)
-      setDeleteDialogOpen(false)
-      setWorkoutToDelete(null)
-    }
-  }
-
   const duplicateWorkout = async (workout: WorkoutPlan) => {
-    await duplicateMutation.mutateAsync(workout)
+    try {
+      const duplicatedWorkout = {
+        name: `${workout.name} (Copy)`,
+        exercises: workout.exercises,
+        client_name: workout.client_name,
+        notes: workout.notes,
+      }
+
+      const { data, error } = await supabase
+        .from('workout_plans')
+        .insert([duplicatedWorkout])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setWorkoutPlans([data, ...workoutPlans])
+      toast.success('Workout duplicated successfully!')
+    } catch (error) {
+      console.error('Error duplicating workout:', error)
+      toast.error('Failed to duplicate workout')
+    }
   }
 
   const shareWorkout = (planId: string) => {
@@ -108,20 +165,26 @@ export default function Dashboard() {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank")
   }
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value)
-    setCurrentPage(1) // Reset to first page on search
-  }
-
-  const handleSortChange = (value: "date" | "name" | "client") => {
-    setSortBy(value)
-    setCurrentPage(1) // Reset to first page on sort change
-  }
+  // Filter and sort workouts
+  const filteredAndSortedWorkouts = workoutPlans
+    .filter((plan) => {
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        plan.name.toLowerCase().includes(searchLower) ||
+        plan.client_name?.toLowerCase().includes(searchLower) ||
+        plan.notes?.toLowerCase().includes(searchLower)
+      )
+    })
+    .sort((a, b) => {
+      if (sortBy === "date") {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      } else if (sortBy === "name") {
+        return a.name.localeCompare(b.name)
+      } else if (sortBy === "client") {
+        return (a.client_name || "").localeCompare(b.client_name || "")
+      }
+      return 0
+    })
 
   if (showBuilder) {
     return (
@@ -194,7 +257,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-white">{stats?.totalWorkouts ?? 0}</div>
+              <div className="text-4xl font-bold text-white">{workoutPlans.length}</div>
             </CardContent>
           </Card>
 
@@ -206,7 +269,9 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-white">{stats?.activeClients ?? 0}</div>
+              <div className="text-4xl font-bold text-white">
+                {new Set(workoutPlans.map((p) => p.client_name).filter(Boolean)).size}
+              </div>
             </CardContent>
           </Card>
 
@@ -218,7 +283,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-white">{stats?.plansShared ?? 0}</div>
+              <div className="text-4xl font-bold text-white">{workoutPlans.length}</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -238,7 +303,7 @@ export default function Dashboard() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
                       value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
+                      onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder={t("Search workouts, clients, or notes...")}
                       className="pl-10 bg-[#282828] border-none text-white placeholder:text-gray-500 focus:ring-2 focus:ring-[#1DB954]"
                     />
@@ -246,7 +311,7 @@ export default function Dashboard() {
                   <div className="flex gap-2">
                     <select
                       value={sortBy}
-                      onChange={(e) => handleSortChange(e.target.value as "date" | "name" | "client")}
+                      onChange={(e) => setSortBy(e.target.value as "date" | "name" | "client")}
                       className="px-4 py-2 bg-[#282828] border-none rounded-md text-white text-sm focus:ring-2 focus:ring-[#1DB954]"
                     >
                       <option value="date">{t("Sort by Date")}</option>
@@ -255,32 +320,20 @@ export default function Dashboard() {
                     </select>
                   </div>
                 </div>
-                {debouncedSearch && workoutsData && (
+                {searchTerm && (
                   <div className="mt-3 text-sm text-[#1DB954]">
-                    {workoutsData.totalCount} {t("results found")}
+                    {filteredAndSortedWorkouts.length} {t("results found")}
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Loading State */}
-          {isLoading && <WorkoutCardSkeletonGrid count={12} />}
-
-          {/* Error State */}
-          {isError && (
-            <Card className="bg-[#181818] border-none border-red-500/20">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="text-red-500 text-center">
-                  <p className="text-lg font-semibold mb-2">Failed to load workouts</p>
-                  <p className="text-sm text-gray-400">{error instanceof Error ? error.message : "Unknown error"}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Empty State - No Workouts */}
-          {!isLoading && !isError && workoutsData?.workouts.length === 0 && !debouncedSearch && (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1DB954]"></div>
+            </div>
+          ) : filteredAndSortedWorkouts.length === 0 && !searchTerm ? (
             <Card className="bg-[#181818] border-none border-dashed border-[#282828]">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Dumbbell className="w-12 h-12 text-gray-600 mb-4" />
@@ -294,120 +347,96 @@ export default function Dashboard() {
                 </Button>
               </CardContent>
             </Card>
-          )}
-
-          {/* Empty State - No Search Results */}
-          {!isLoading && !isError && workoutsData?.workouts.length === 0 && debouncedSearch && (
+          ) : filteredAndSortedWorkouts.length === 0 && searchTerm ? (
             <Card className="bg-[#181818] border-none">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Search className="w-12 h-12 text-gray-600 mb-4" />
                 <h3 className="text-lg font-semibold text-gray-400 mb-2">{t("No results found")}</h3>
-                <p className="text-gray-500 text-center">{t("Try adjusting your search or filter criteria")}</p>
+                <p className="text-gray-500 text-center">
+                  {t("Try adjusting your search or filter criteria")}
+                </p>
               </CardContent>
             </Card>
-          )}
-
-          {/* Workout Cards Grid */}
-          {!isLoading && !isError && workoutsData && workoutsData.workouts.length > 0 && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {workoutsData.workouts.map((plan, index) => (
-                  <motion.div
-                    key={plan.id}
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card className="bg-[#181818] border-none hover:bg-[#282828] transition-all">
-                      <CardHeader>
-                        <CardTitle className="text-white text-xl">{plan.name}</CardTitle>
-                        <CardDescription className="text-gray-400">
-                          {plan.client_name && (
-                            <Badge variant="secondary" className="bg-[#1DB954]/20 text-[#1DB954] mb-2">
-                              {plan.client_name}
-                            </Badge>
-                          )}
-                          <div>
-                            {plan.exercises.length} {t("exercises")}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {t("Created")}: {new Date(plan.created_at).toLocaleDateString()}
-                          </div>
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex gap-2 mb-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(`/workout/${plan.id}`, "_blank")}
-                            className="flex-1 border-[#282828] hover:bg-[#282828] bg-[#121212]"
-                          >
-                            {t("View")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => shareWorkout(plan.id)}
-                            className="bg-[#1DB954] hover:bg-[#1ed760] text-white"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </Button>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredAndSortedWorkouts.map((plan, index) => (
+                <motion.div
+                  key={plan.id}
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card className="bg-[#181818] border-none hover:bg-[#282828] transition-all">
+                    <CardHeader>
+                      <CardTitle className="text-white text-xl">{plan.name}</CardTitle>
+                      <CardDescription className="text-gray-400">
+                        {plan.client_name && (
+                          <Badge variant="secondary" className="bg-[#1DB954]/20 text-[#1DB954] mb-2">
+                            {plan.client_name}
+                          </Badge>
+                        )}
+                        <div>
+                          {plan.exercises.length} {t("exercises")}
                         </div>
-                        <div className="flex gap-2 mb-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(plan)}
-                            disabled={updateMutation.isPending}
-                            className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
-                          >
-                            <Pencil className="w-4 h-4 mr-2" />
-                            {t("Edit")}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => duplicateWorkout(plan)}
-                            disabled={duplicateMutation.isPending}
-                            className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
-                          >
-                            <Copy className="w-4 h-4 mr-2" />
-                            {t("Duplicate")}
-                          </Button>
+                        <div className="text-xs text-gray-500">
+                          {t("Created")}: {new Date(plan.created_at).toLocaleDateString()}
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteClick(plan.id)}
-                            disabled={deleteMutation.isPending}
-                            className="flex-1 border-red-500/30 hover:bg-red-500/20 text-red-400 bg-[#121212]"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            {t("Delete")}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Pagination Controls */}
-              {workoutsData.totalPages > 1 && (
-                <Card className="bg-[#181818] border-none mt-6">
-                  <CardContent className="p-4">
-                    <PaginationControls
-                      currentPage={workoutsData.currentPage}
-                      totalPages={workoutsData.totalPages}
-                      totalItems={workoutsData.totalCount}
-                      itemsPerPage={workoutsData.itemsPerPage}
-                      onPageChange={handlePageChange}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-            </>
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex gap-2 mb-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(`/workout/${plan.id}`, "_blank")}
+                          className="flex-1 border-[#282828] hover:bg-[#282828] bg-[#121212]"
+                        >
+                          {t("View")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => shareWorkout(plan.id)}
+                          className="bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 mb-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(plan)}
+                          className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          {t("Edit")}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => duplicateWorkout(plan)}
+                          className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          {t("Duplicate")}
+                        </Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteClick(plan.id)}
+                          className="flex-1 border-red-500/30 hover:bg-red-500/20 text-red-400 bg-[#121212]"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          {t("Delete")}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
           )}
         </motion.div>
       </main>
@@ -422,18 +451,14 @@ export default function Dashboard() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              className="bg-[#181818] text-white hover:bg-[#121212] border-none"
-              onClick={() => setWorkoutToDelete(null)}
-            >
+            <AlertDialogCancel className="bg-[#181818] text-white hover:bg-[#121212] border-none">
               {t("Cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmDelete}
-              disabled={deleteMutation.isPending}
+              onClick={() => workoutToDelete && deleteWorkoutPlan(workoutToDelete)}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {deleteMutation.isPending ? "Deleting..." : t("Delete")}
+              {t("Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
