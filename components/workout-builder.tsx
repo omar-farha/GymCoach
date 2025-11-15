@@ -181,14 +181,14 @@ export default function WorkoutBuilder({
   );
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white">
+    <div className="min-h-screen bg-[#121212] text-white overflow-x-hidden">
       {/* Header */}
       <motion.header
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         className="bg-[#181818] sticky top-0 z-50 shadow-lg"
       >
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-3 sm:px-4 py-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -199,7 +199,7 @@ export default function WorkoutBuilder({
               <ArrowLeft className="w-4 h-4 mr-2" />
               {t("Back")}
             </Button>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-lg sm:text-2xl font-bold text-white">
               {editingWorkout ? t("Edit Workout Plan") : t("Create Workout Plan")}
             </h1>
           </div>
@@ -207,16 +207,17 @@ export default function WorkoutBuilder({
           <Button
             onClick={saveWorkout}
             disabled={!workoutName.trim() || selectedExercises.length === 0}
-            className="bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold px-6 disabled:bg-gray-700 disabled:text-gray-500"
+            className="bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold px-3 sm:px-6 disabled:bg-gray-700 disabled:text-gray-500 text-sm sm:text-base"
           >
-            <Send className="w-4 h-4 mr-2" />
-            {t("Save Workout")}
+            <Send className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">{t("Save Workout")}</span>
+            <span className="sm:hidden">{t("Save")}</span>
           </Button>
         </div>
       </motion.header>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Workout Details */}
           <motion.div
             initial={{ x: -20, opacity: 0 }}
@@ -436,33 +437,33 @@ export default function WorkoutBuilder({
 
       {/* Exercise Preview Modal */}
       <Dialog open={!!previewExercise} onOpenChange={() => setPreviewExercise(null)}>
-        <DialogContent className="bg-[#181818] border-none max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-[#181818] border-none w-[95vw] max-w-md sm:max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           {previewExercise && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-[#1DB954] text-xl">
+              <DialogHeader className="pb-3">
+                <DialogTitle className="text-[#1DB954] text-base sm:text-xl leading-tight pr-6">
                   {previewExercise.name}
                 </DialogTitle>
-                <DialogDescription className="flex flex-wrap gap-2 mt-2">
-                  <Badge variant="secondary" className="bg-[#1DB954]/20 text-[#1DB954] border-none">
+                <DialogDescription className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
+                  <Badge variant="secondary" className="bg-[#1DB954]/20 text-[#1DB954] border-none text-xs">
                     {previewExercise.target}
                   </Badge>
-                  <Badge variant="secondary" className="bg-[#282828] text-gray-300 border-none">
+                  <Badge variant="secondary" className="bg-[#282828] text-gray-300 border-none text-xs">
                     {previewExercise.equipment}
                   </Badge>
-                  <Badge variant="secondary" className="bg-[#282828] text-gray-300 border-none">
+                  <Badge variant="secondary" className="bg-[#282828] text-gray-300 border-none text-xs">
                     {previewExercise.bodyPart}
                   </Badge>
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Exercise GIF */}
                 <div className="relative bg-[#121212] rounded-lg overflow-hidden">
                   <img
                     src={previewExercise.gifUrl || "/placeholder.svg"}
                     alt={previewExercise.name}
-                    className="w-full h-64 sm:h-80 md:h-96 object-contain"
+                    className="w-full h-48 sm:h-64 object-contain"
                   />
                 </div>
 
@@ -471,7 +472,7 @@ export default function WorkoutBuilder({
                   <Button
                     onClick={() => setPreviewExercise(null)}
                     variant="outline"
-                    className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
+                    className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212] text-sm sm:text-base h-9 sm:h-10"
                   >
                     {t("Close")}
                   </Button>
@@ -481,14 +482,14 @@ export default function WorkoutBuilder({
                       setPreviewExercise(null);
                     }}
                     disabled={selectedExerciseIds.has(previewExercise.id)}
-                    className="flex-1 bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold disabled:bg-[#282828] disabled:text-gray-500"
+                    className="flex-1 bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold disabled:bg-[#282828] disabled:text-gray-500 text-sm sm:text-base h-9 sm:h-10"
                   >
                     {selectedExerciseIds.has(previewExercise.id) ? (
-                      t("Already Added")
+                      <span className="text-xs sm:text-base">{t("Already Added")}</span>
                     ) : (
                       <>
-                        <Plus className="w-4 h-4 mr-2" />
-                        {t("Add to Workout")}
+                        <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                        <span className="text-xs sm:text-base">{t("Add to Workout")}</span>
                       </>
                     )}
                   </Button>

@@ -26,7 +26,7 @@ export const ExerciseGrid = memo(function ExerciseGrid({
   const { t } = useLanguage();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
       {exercises.map((exercise, index) => (
         <motion.div
           key={exercise.id}
