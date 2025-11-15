@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, X, Play, ArrowLeft, Send, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Plus, X, ArrowLeft, Send, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/hooks/use-language";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useExercises, type Exercise } from "@/hooks/use-exercises";
@@ -437,14 +436,14 @@ export default function WorkoutBuilder({
 
       {/* Exercise Preview Modal */}
       <Dialog open={!!previewExercise} onOpenChange={() => setPreviewExercise(null)}>
-        <DialogContent className="bg-[#181818] border-none max-w-2xl">
+        <DialogContent className="bg-[#181818] border-none max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           {previewExercise && (
             <>
               <DialogHeader>
                 <DialogTitle className="text-[#1DB954] text-xl">
                   {previewExercise.name}
                 </DialogTitle>
-                <DialogDescription className="flex gap-2 mt-2">
+                <DialogDescription className="flex flex-wrap gap-2 mt-2">
                   <Badge variant="secondary" className="bg-[#1DB954]/20 text-[#1DB954] border-none">
                     {previewExercise.target}
                   </Badge>
@@ -463,41 +462,37 @@ export default function WorkoutBuilder({
                   <img
                     src={previewExercise.gifUrl || "/placeholder.svg"}
                     alt={previewExercise.name}
-                    className="w-full h-96 object-contain"
+                    className="w-full h-64 sm:h-80 md:h-96 object-contain"
                   />
                 </div>
 
-                {/* Instructions */}
-                <div>
-                  <h4 className="text-lg font-semibold text-white mb-3">{t("Instructions")}</h4>
-                  <ol className="space-y-2">
-                    {previewExercise.instructions.map((instruction, index) => (
-                      <li key={index} className="text-gray-300 flex">
-                        <span className="text-[#1DB954] font-semibold mr-3 min-w-[1.5rem]">{index + 1}.</span>
-                        <span>{instruction}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-
                 {/* Add Exercise Button */}
-                <Button
-                  onClick={() => {
-                    addExercise(previewExercise);
-                    setPreviewExercise(null);
-                  }}
-                  disabled={selectedExercises.some((e) => e.id === previewExercise.id)}
-                  className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold disabled:bg-[#282828] disabled:text-gray-500"
-                >
-                  {selectedExercises.some((e) => e.id === previewExercise.id) ? (
-                    t("Already Added")
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" />
-                      {t("Add to Workout")}
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => setPreviewExercise(null)}
+                    variant="outline"
+                    className="flex-1 border-[#282828] hover:bg-[#282828] text-white bg-[#121212]"
+                  >
+                    {t("Close")}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      addExercise(previewExercise);
+                      setPreviewExercise(null);
+                    }}
+                    disabled={selectedExerciseIds.has(previewExercise.id)}
+                    className="flex-1 bg-[#1DB954] hover:bg-[#1ed760] text-white font-semibold disabled:bg-[#282828] disabled:text-gray-500"
+                  >
+                    {selectedExerciseIds.has(previewExercise.id) ? (
+                      t("Already Added")
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        {t("Add to Workout")}
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </>
           )}
