@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
+import { matchesEgyptianSearch } from "@/lib/exercise-translations"
 
 export interface Exercise {
   id: string
@@ -13,7 +14,7 @@ export interface Exercise {
   reps?: number
 }
 
-const EXERCISES_PER_PAGE = 50
+const EXERCISES_PER_PAGE = 15
 
 interface ExerciseFilters {
   bodyPart?: string
@@ -47,7 +48,7 @@ export function useExercises(filters: ExerciseFilters = {}) {
   // Fetch all exercises once
   const { data: allExercises, isLoading, isError, error } = useAllExercises()
 
-  // Filter and paginate on client side (INSTANT!)
+  // Filter and paginate on client side (INSTANT with Egyptian Arabic!)
   const paginatedData = useMemo(() => {
     if (!allExercises) {
       return {
@@ -65,15 +66,9 @@ export function useExercises(filters: ExerciseFilters = {}) {
       filtered = allExercises.filter((ex) => ex.bodyPart === bodyPart)
     }
 
-    // Filter by search term
+    // Filter by search term (supports both English and Egyptian Arabic)
     if (search) {
-      const searchLower = search.toLowerCase()
-      filtered = filtered.filter(
-        (exercise) =>
-          exercise.name.toLowerCase().includes(searchLower) ||
-          exercise.target.toLowerCase().includes(searchLower) ||
-          exercise.equipment.toLowerCase().includes(searchLower)
-      )
+      filtered = filtered.filter((exercise) => matchesEgyptianSearch(exercise, search))
     }
 
     // Paginate
